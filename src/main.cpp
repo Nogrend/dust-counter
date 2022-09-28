@@ -2,25 +2,106 @@
 #include <Adafruit_PM25AQI.h>
 #include <SPI.h>
 
-/* Test sketch for Adafruit PM2.5 sensor with UART or I2C */
+#define OFF 0
+#define GREEN 1
+#define RED 2
 
-// If your PM2.5 is UART only, for UNO and others (without hardware serial)
-// we must use software serial...
-// pin #2 is IN from sensor (TX pin on sensor), leave pin #3 disconnected
-// comment these two lines if using hardware serial
-//#include <SoftwareSerial.h>
-// SoftwareSerial pmSerial(2, 3);
-
-// prototype
-// void show_on_lcd(PM25_AQI_Data data);
-// void sendToNodeRed(PM25_AQI_Data data);
+const int8_t buttonPin = 3;
+const int8_t ledPinAnode = 4;
+const int8_t ledPinCathode = 5;
 
 Adafruit_PM25AQI aqi = Adafruit_PM25AQI();
 
+// prototypes
+void setLedIndicator(uint8_t);
+bool isButtonClosed(void);
+void getAirQualityReading(PM25_AQI_Data *pointerData);
+void sendAirQualityDataOverSerial(PM25_AQI_Data);
+
 void setup()
 {
-  // lol
+  // initialization serial communication
+  Serial.begin(9600);
+
+  // initialization air quality sensor communication
+  if (!aqi.begin_I2C())
+    while (1)
+      delay(10);
+
+  // initialization button
+  pinMode(buttonPin, INPUT);
+
+  // initialization led indicator
+  pinMode(ledPinAnode, OUTPUT);
+  digitalWrite(ledPinAnode, LOW);
+  pinMode(ledPinCathode, OUTPUT);
+  digitalWrite(ledPinCathode, LOW);
 }
+
 void loop()
 {
+  if (isButtonClosed())
+  {
+    setLedIndicator(RED);
+
+    PM25_AQI_Data data;
+    getAirQualityReading(&data);
+    sendAirQualityDataOverSerial(data);
+  }
+  else
+  {
+    setLedIndicator(GREEN);
+  }
+  delay(5000);
+}
+
+void setLedIndicator(uint8_t state)
+{
+  switch (state)
+  {
+  case OFF:
+    digitalWrite(ledPinAnode, LOW);
+    digitalWrite(ledPinCathode, LOW);
+    break;
+
+  case GREEN:
+    digitalWrite(ledPinAnode, HIGH);
+    digitalWrite(ledPinCathode, LOW);
+    break;
+
+  case RED:
+    digitalWrite(ledPinAnode, LOW);
+    digitalWrite(ledPinCathode, HIGH);
+    break;
+
+  default:
+    break;
+  }
+}
+
+bool isButtonClosed(void)
+{
+  bool buttonState = false;
+  if (!digitalRead(buttonPin))
+  {
+    buttonState = true;
+  }
+  delay(500);
+  return buttonState;
+}
+
+void getAirQualityReading(PM25_AQI_Data *pointerData)
+{
+  aqi.read(pointerData);
+}
+
+void sendAirQualityDataOverSerial(PM25_AQI_Data data)
+{
+  String dataString = String(data.particles_03um) +
+                      "," + String(data.particles_05um) +
+                      "," + String(data.particles_10um) +
+                      "," + String(data.particles_25um) +
+                      "," + String(data.particles_50um) +
+                      "," + String(data.particles_100um);
+  Serial.println(dataString);
 }
